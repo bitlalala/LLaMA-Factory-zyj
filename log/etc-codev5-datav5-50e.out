@@ -1,0 +1,58 @@
+[2024-02-05 09:12:12,991] [INFO] [real_accelerator.py:133:get_accelerator] Setting ds_accelerator to cuda (auto detect)
+[2024-02-05 09:12:16,264] [WARNING] [runner.py:196:fetch_hostfile] Unable to find hostfile, will proceed with training with local resources only.
+[2024-02-05 09:12:16,264] [INFO] [runner.py:555:main] cmd = /mnt/nas_data/zyj_workspace/zyj_data/conda_env/llama_factory/bin/python3.10 -u -m deepspeed.launcher.launch --world_info=eyJsb2NhbGhvc3QiOiBbNSwgNl19 --master_addr=127.0.0.1 --master_port=9907 --enable_each_rank_log=None src/train_bash.py --deepspeed ds_config.json --stage sft --model_name_or_path /mnt/nas_data/zyj_workspace/zyj_data/Baichuan2-13B-Chat --output_dir /mnt/nas_data/zyj_workspace/zyj_data/sft_output/bachuan2-13B-sft-etc-v5-50e-bs16-codev0.5.0 --do_train --dataset etc-v5-700-total-output --split train --val_size 0.1 --template baichuan2 --finetuning_type lora --lora_rank 8 --lora_target W_pack --overwrite_cache --per_device_train_batch_size 4 --per_device_eval_batch_size 4 --gradient_accumulation_steps 2 --preprocessing_num_workers 16 --lr_scheduler_type cosine --logging_steps 5 --save_steps 100 --learning_rate 5e-5 --max_grad_norm 0.5 --num_train_epochs 50 --evaluation_strategy steps --load_best_model_at_end --plot_loss --fp16 --overwrite_output_dir True
+[2024-02-05 09:12:18,525] [INFO] [real_accelerator.py:133:get_accelerator] Setting ds_accelerator to cuda (auto detect)
+[2024-02-05 09:12:20,036] [INFO] [launch.py:145:main] WORLD INFO DICT: {'localhost': [5, 6]}
+[2024-02-05 09:12:20,036] [INFO] [launch.py:151:main] nnodes=1, num_local_procs=2, node_rank=0
+[2024-02-05 09:12:20,036] [INFO] [launch.py:162:main] global_rank_mapping=defaultdict(<class 'list'>, {'localhost': [0, 1]})
+[2024-02-05 09:12:20,036] [INFO] [launch.py:163:main] dist_world_size=2
+[2024-02-05 09:12:20,037] [INFO] [launch.py:165:main] Setting CUDA_VISIBLE_DEVICES=5,6
+[2024-02-05 09:12:26,363] [INFO] [real_accelerator.py:133:get_accelerator] Setting ds_accelerator to cuda (auto detect)
+[2024-02-05 09:12:26,413] [INFO] [real_accelerator.py:133:get_accelerator] Setting ds_accelerator to cuda (auto detect)
+Traceback (most recent call last):
+  File "/mnt/nas_data/zyj_workspace/zyj_code/LLaMA-Efficient-Tuning/src/train_bash.py", line 1, in <module>
+    from llmtuner import run_exp
+  File "/mnt/nas_data/zyj_workspace/zyj_code/LLaMA-Efficient-Tuning/src/llmtuner/__init__.py", line 3, in <module>
+Traceback (most recent call last):
+  File "/mnt/nas_data/zyj_workspace/zyj_code/LLaMA-Efficient-Tuning/src/train_bash.py", line 1, in <module>
+    from .api import create_app
+  File "/mnt/nas_data/zyj_workspace/zyj_code/LLaMA-Efficient-Tuning/src/llmtuner/api/__init__.py", line 1, in <module>
+    from llmtuner import run_exp    
+from .app import create_app
+  File "/mnt/nas_data/zyj_workspace/zyj_code/LLaMA-Efficient-Tuning/src/llmtuner/__init__.py", line 3, in <module>
+  File "/mnt/nas_data/zyj_workspace/zyj_code/LLaMA-Efficient-Tuning/src/llmtuner/api/app.py", line 9, in <module>
+    from ..chat import ChatModel
+      File "/mnt/nas_data/zyj_workspace/zyj_code/LLaMA-Efficient-Tuning/src/llmtuner/chat/__init__.py", line 1, in <module>
+from .api import create_app
+  File "/mnt/nas_data/zyj_workspace/zyj_code/LLaMA-Efficient-Tuning/src/llmtuner/api/__init__.py", line 1, in <module>
+    from .chat_model import ChatModel    
+from .app import create_app  File "/mnt/nas_data/zyj_workspace/zyj_code/LLaMA-Efficient-Tuning/src/llmtuner/chat/chat_model.py", line 11, in <module>
+
+  File "/mnt/nas_data/zyj_workspace/zyj_code/LLaMA-Efficient-Tuning/src/llmtuner/api/app.py", line 9, in <module>
+    from ..model import dispatch_model, load_model_and_tokenizer
+      File "/mnt/nas_data/zyj_workspace/zyj_code/LLaMA-Efficient-Tuning/src/llmtuner/model/__init__.py", line 1, in <module>
+from ..chat import ChatModel
+  File "/mnt/nas_data/zyj_workspace/zyj_code/LLaMA-Efficient-Tuning/src/llmtuner/chat/__init__.py", line 1, in <module>
+    from .loader import load_model_and_tokenizer
+  File "/mnt/nas_data/zyj_workspace/zyj_code/LLaMA-Efficient-Tuning/src/llmtuner/model/loader.py", line 11, in <module>
+    from .chat_model import ChatModel
+  File "/mnt/nas_data/zyj_workspace/zyj_code/LLaMA-Efficient-Tuning/src/llmtuner/chat/chat_model.py", line 11, in <module>
+    from .patcher import patch_config, patch_model, patch_tokenizer, patch_valuehead_model
+      File "/mnt/nas_data/zyj_workspace/zyj_code/LLaMA-Efficient-Tuning/src/llmtuner/model/patcher.py", line 18, in <module>
+from ..model import dispatch_model, load_model_and_tokenizer
+  File "/mnt/nas_data/zyj_workspace/zyj_code/LLaMA-Efficient-Tuning/src/llmtuner/model/__init__.py", line 1, in <module>
+    from ..extras.patches.llama_patch import apply_llama_patch
+      File "/mnt/nas_data/zyj_workspace/zyj_code/LLaMA-Efficient-Tuning/src/llmtuner/extras/patches/llama_patch.py", line 6, in <module>
+from .loader import load_model_and_tokenizer
+  File "/mnt/nas_data/zyj_workspace/zyj_code/LLaMA-Efficient-Tuning/src/llmtuner/model/loader.py", line 11, in <module>
+        from .patcher import patch_config, patch_model, patch_tokenizer, patch_valuehead_modelfrom transformers.models.llama.modeling_llama import (
+
+  File "/mnt/nas_data/zyj_workspace/zyj_code/LLaMA-Efficient-Tuning/src/llmtuner/model/patcher.py", line 18, in <module>
+ImportError: cannot import name 'Cache' from 'transformers.models.llama.modeling_llama' (/mnt/nas_data/zyj_workspace/zyj_data/conda_env/llama_factory/lib/python3.10/site-packages/transformers/models/llama/modeling_llama.py)
+    from ..extras.patches.llama_patch import apply_llama_patch
+  File "/mnt/nas_data/zyj_workspace/zyj_code/LLaMA-Efficient-Tuning/src/llmtuner/extras/patches/llama_patch.py", line 6, in <module>
+    from transformers.models.llama.modeling_llama import (
+ImportError: cannot import name 'Cache' from 'transformers.models.llama.modeling_llama' (/mnt/nas_data/zyj_workspace/zyj_data/conda_env/llama_factory/lib/python3.10/site-packages/transformers/models/llama/modeling_llama.py)
+[2024-02-05 09:12:28,047] [INFO] [launch.py:315:sigkill_handler] Killing subprocess 3618898
+[2024-02-05 09:12:28,071] [INFO] [launch.py:315:sigkill_handler] Killing subprocess 3618899
+[2024-02-05 09:12:28,071] [ERROR] [launch.py:321:sigkill_handler] ['/mnt/nas_data/zyj_workspace/zyj_data/conda_env/llama_factory/bin/python3.10', '-u', 'src/train_bash.py', '--local_rank=1', '--deepspeed', 'ds_config.json', '--stage', 'sft', '--model_name_or_path', '/mnt/nas_data/zyj_workspace/zyj_data/Baichuan2-13B-Chat', '--output_dir', '/mnt/nas_data/zyj_workspace/zyj_data/sft_output/bachuan2-13B-sft-etc-v5-50e-bs16-codev0.5.0', '--do_train', '--dataset', 'etc-v5-700-total-output', '--split', 'train', '--val_size', '0.1', '--template', 'baichuan2', '--finetuning_type', 'lora', '--lora_rank', '8', '--lora_target', 'W_pack', '--overwrite_cache', '--per_device_train_batch_size', '4', '--per_device_eval_batch_size', '4', '--gradient_accumulation_steps', '2', '--preprocessing_num_workers', '16', '--lr_scheduler_type', 'cosine', '--logging_steps', '5', '--save_steps', '100', '--learning_rate', '5e-5', '--max_grad_norm', '0.5', '--num_train_epochs', '50', '--evaluation_strategy', 'steps', '--load_best_model_at_end', '--plot_loss', '--fp16', '--overwrite_output_dir', 'True'] exits with return code = 1
