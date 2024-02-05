@@ -1,18 +1,22 @@
-import os
 import json
-import gradio as gr
-import matplotlib.figure
-import matplotlib.pyplot as plt
-from typing import TYPE_CHECKING, Any, Dict, Generator, List, Optional, Tuple
+import os
 from datetime import datetime
+from typing import TYPE_CHECKING, Any, Dict
 
-from llmtuner.extras.ploting import smooth
-from llmtuner.tuner import export_model
-from llmtuner.webui.common import get_save_dir, DATA_CONFIG
-from llmtuner.webui.locales import ALERTS
+import gradio as gr
+
+from ..extras.packages import is_matplotlib_available
+from ..extras.ploting import smooth
+from .common import get_save_dir
+from .locales import ALERTS
+
 
 if TYPE_CHECKING:
-    from llmtuner.extras.callbacks import LogCallback
+    from ..extras.callbacks import LogCallback
+
+if is_matplotlib_available():
+    import matplotlib.figure
+    import matplotlib.pyplot as plt
 
 
 def update_process_bar(callback: "LogCallback") -> Dict[str, Any]:
@@ -21,47 +25,13 @@ def update_process_bar(callback: "LogCallback") -> Dict[str, Any]:
 
     percentage = round(100 * callback.cur_steps / callback.max_steps, 0) if callback.max_steps != 0 else 100.0
     label = "Running {:d}/{:d}: {} < {}".format(
-        callback.cur_steps,
-        callback.max_steps,
-        callback.elapsed_time,
-        callback.remaining_time
+        callback.cur_steps, callback.max_steps, callback.elapsed_time, callback.remaining_time
     )
     return gr.update(label=label, value=percentage, visible=True)
 
 
 def get_time() -> str:
-    return datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
-
-
-def can_preview(dataset_dir: str, dataset: list) -> Dict[str, Any]:
-    with open(os.path.join(dataset_dir, DATA_CONFIG), "r", encoding="utf-8") as f:
-        dataset_info = json.load(f)
-
-    if (
-        len(dataset) > 0
-        and "file_name" in dataset_info[dataset[0]]
-        and os.path.isfile(os.path.join(dataset_dir, dataset_info[dataset[0]]["file_name"]))
-    ):
-        return gr.update(interactive=True)
-    else:
-        return gr.update(interactive=False)
-
-
-def get_preview(
-    dataset_dir: str, dataset: list, start: Optional[int] = 0, end: Optional[int] = 2
-) -> Tuple[int, list, Dict[str, Any]]:
-    with open(os.path.join(dataset_dir, DATA_CONFIG), "r", encoding="utf-8") as f:
-        dataset_info = json.load(f)
-
-    data_file: str = dataset_info[dataset[0]]["file_name"]
-    with open(os.path.join(dataset_dir, data_file), "r", encoding="utf-8") as f:
-        if data_file.endswith(".json"):
-            data = json.load(f)
-        elif data_file.endswith(".jsonl"):
-            data = [json.loads(line) for line in f]
-        else:
-            data = [line for line in f]
-    return len(data), data[start:end], gr.update(visible=True)
+    return datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
 
 
 def can_quantize(finetuning_type: str) -> Dict[str, Any]:
@@ -71,12 +41,24 @@ def can_quantize(finetuning_type: str) -> Dict[str, Any]:
         return gr.update(interactive=True)
 
 
+def check_json_schema(text: str, lang: str) -> None:
+    try:
+        tools = json.loads(text)
+        for tool in tools:
+            assert "name" in tool
+    except AssertionError:
+        gr.Warning(ALERTS["err_tool_name"][lang])
+    except json.JSONDecodeError:
+        gr.Warning(ALERTS["err_json_schema"][lang])
+
+
 def gen_cmd(args: Dict[str, Any]) -> str:
     args.pop("disable_tqdm", None)
     args["plot_loss"] = args.get("do_train", None)
-    cmd_lines = ["CUDA_VISIBLE_DEVICES=0 python src/train_bash.py "]
+    current_devices = os.environ.get("CUDA_VISIBLE_DEVICES", "0")
+    cmd_lines = ["CUDA_VISIBLE_DEVICES={} python src/train_bash.py ".format(current_devices)]
     for k, v in args.items():
-        if v is not None and v != "":
+        if v is not None and v is not False and v != "":
             cmd_lines.append("    --{} {} ".format(k, str(v)))
     cmd_text = "\\\n".join(cmd_lines)
     cmd_text = "```bash\n{}\n```".format(cmd_text)
@@ -89,10 +71,12 @@ def get_eval_results(path: os.PathLike) -> str:
     return "```json\n{}\n```\n".format(result)
 
 
-def gen_plot(base_model: str, finetuning_type: str, output_dir: str) -> matplotlib.figure.Figure:
+def gen_plot(base_model: str, finetuning_type: str, output_dir: str) -> "matplotlib.figure.Figure":
+    if not base_model:
+        return
     log_file = get_save_dir(base_model, finetuning_type, output_dir, "trainer_log.jsonl")
     if not os.path.isfile(log_file):
-        return None
+        return
 
     plt.close("all")
     fig = plt.figure()
@@ -114,42 +98,3 @@ def gen_plot(base_model: str, finetuning_type: str, output_dir: str) -> matplotl
     ax.set_xlabel("step")
     ax.set_ylabel("loss")
     return fig
-
-
-def save_model(
-    lang: str,
-    model_name: str,
-    model_path: str,
-    checkpoints: List[str],
-    finetuning_type: str,
-    template: str,
-    max_shard_size: int,
-    export_dir: str
-) -> Generator[str, None, None]:
-    if not model_name:
-        yield ALERTS["err_no_model"][lang]
-        return
-
-    if not model_path:
-        yield ALERTS["err_no_path"][lang]
-        return
-
-    if not checkpoints:
-        yield ALERTS["err_no_checkpoint"][lang]
-        return
-
-    if not export_dir:
-        yield ALERTS["err_no_export_dir"][lang]
-        return
-
-    args = dict(
-        model_name_or_path=model_path,
-        checkpoint_dir=",".join([get_save_dir(model_name, finetuning_type, ckpt) for ckpt in checkpoints]),
-        finetuning_type=finetuning_type,
-        template=template,
-        export_dir=export_dir
-    )
-
-    yield ALERTS["info_exporting"][lang]
-    export_model(args, max_shard_size="{}GB".format(max_shard_size))
-    yield ALERTS["info_exported"][lang]
