@@ -88,16 +88,16 @@ class Template:
             elif i > 0 and i % 2 == 0:
                 elements += self.format_separator.apply()
 
-            if message["role"] == Role.USER:
+            if message["role"] == Role.USER.value:
                 elements += self.format_user.apply(content=message["content"], idx=str(i // 2))
-            elif message["role"] == Role.ASSISTANT:
+            elif message["role"] == Role.ASSISTANT.value:
                 elements += self.format_assistant.apply(content=message["content"])
-            elif message["role"] == Role.OBSERVATION:
+            elif message["role"] == Role.OBSERVATION.value:
                 elements += self.format_observation.apply(content=message["content"])
-            elif message["role"] == Role.FUNCTION:
+            elif message["role"] == Role.FUNCTION.value:
                 elements += self.format_function.apply(content=message["content"])
             else:
-                raise NotImplementedError
+                raise NotImplementedError("Unexpected role: {}".format(message["role"]))
 
             encoded_messages.append(self._convert_elements_to_ids(tokenizer, elements))
 
@@ -179,16 +179,16 @@ class Llama2Template(Template):
             elif i > 0 and i % 2 == 0:
                 elements += self.format_separator.apply()
 
-            if message["role"] == Role.USER:
+            if message["role"] == Role.USER.value:
                 elements += self.format_user.apply(content=system_text + message["content"])
-            elif message["role"] == Role.ASSISTANT:
+            elif message["role"] == Role.ASSISTANT.value:
                 elements += self.format_assistant.apply(content=message["content"])
-            elif message["role"] == Role.OBSERVATION:
+            elif message["role"] == Role.OBSERVATION.value:
                 elements += self.format_observation.apply(content=message["content"])
-            elif message["role"] == Role.FUNCTION:
+            elif message["role"] == Role.FUNCTION.value:
                 elements += self.format_function.apply(content=message["content"])
             else:
-                raise NotImplementedError
+                raise NotImplementedError("Unexpected role: {}".format(message["role"]))
 
             encoded_messages.append(self._convert_elements_to_ids(tokenizer, elements))
 
@@ -198,7 +198,7 @@ class Llama2Template(Template):
 templates: Dict[str, Template] = {}
 
 
-def register_template(
+def _register_template(
     name: str,
     format_user: Optional["Formatter"] = None,
     format_assistant: Optional["Formatter"] = None,
@@ -236,29 +236,45 @@ def register_template(
     )
 
 
-def get_template_and_fix_tokenizer(name: str, tokenizer: "PreTrainedTokenizer") -> Template:
-    if tokenizer.eos_token_id is None:
-        tokenizer.eos_token = "<|endoftext|>"
+def _add_or_replace_eos_token(tokenizer: "PreTrainedTokenizer", eos_token: str) -> None:
+    is_added = tokenizer.eos_token_id is None
+    is_oov = eos_token not in tokenizer.get_vocab()
+    tokenizer.add_special_tokens({"eos_token": eos_token})
+
+    if is_added:
         logger.info("Add eos token: {}".format(tokenizer.eos_token))
+    else:
+        logger.info("Replace eos token: {}".format(tokenizer.eos_token))
 
-    if tokenizer.pad_token_id is None:
-        tokenizer.pad_token = tokenizer.eos_token
-        logger.info("Add pad token: {}".format(tokenizer.pad_token))
+    if is_oov:
+        logger.warning("New tokens have been added, make sure `resize_vocab` is True.")
 
-    if name is None:  # for pre-training
-        return None
 
-    template = templates.get(name, None)
-    assert template is not None, "Template {} does not exist.".format(name)
+def get_template_and_fix_tokenizer(
+    tokenizer: "PreTrainedTokenizer",
+    name: Optional[str] = None,
+) -> Template:
+    if name is None:
+        template = templates["vanilla"]  # placeholder
+    else:
+        template = templates.get(name, None)
+        if template is None:
+            raise ValueError("Template {} does not exist.".format(name))
 
     stop_words = template.stop_words
     if template.replace_eos:
         if not stop_words:
             raise ValueError("Stop words are required to replace the EOS token.")
 
-        tokenizer.eos_token = stop_words[0]
+        _add_or_replace_eos_token(tokenizer, eos_token=stop_words[0])
         stop_words = stop_words[1:]
-        logger.info("Replace eos token: {}".format(tokenizer.eos_token))
+
+    if tokenizer.eos_token_id is None:
+        _add_or_replace_eos_token(tokenizer, eos_token="<|endoftext|>")
+
+    if tokenizer.pad_token_id is None:
+        tokenizer.pad_token = tokenizer.eos_token
+        logger.info("Add pad token: {}".format(tokenizer.pad_token))
 
     if stop_words:
         tokenizer.add_special_tokens(
@@ -269,7 +285,7 @@ def get_template_and_fix_tokenizer(name: str, tokenizer: "PreTrainedTokenizer") 
     return template
 
 
-register_template(
+_register_template(
     name="alpaca",
     format_user=StringFormatter(slots=["### Instruction:\n{{content}}\n\n### Response:\n"]),
     format_separator=EmptyFormatter(slots=["\n\n"]),
@@ -279,7 +295,7 @@ register_template(
 )
 
 
-register_template(
+_register_template(
     name="aquila",
     format_user=StringFormatter(slots=["Human: {{content}}###Assistant:"]),
     format_separator=EmptyFormatter(slots=["###"]),
@@ -292,21 +308,30 @@ register_template(
 )
 
 
-register_template(
+_register_template(
+    name="atom",
+    format_user=StringFormatter(
+        slots=[{"bos_token"}, "Human: {{content}}\n", {"eos_token"}, {"bos_token"}, "Assistant:"]
+    ),
+    format_assistant=StringFormatter(slots=["{{content}}\n", {"eos_token"}]),
+)
+
+
+_register_template(
     name="baichuan",
     format_user=StringFormatter(slots=[{"token": "<reserved_102>"}, "{{content}}", {"token": "<reserved_103>"}]),
     efficient_eos=True,
 )
 
 
-register_template(
+_register_template(
     name="baichuan2",
     format_user=StringFormatter(slots=[{"token": "<reserved_106>"}, "{{content}}", {"token": "<reserved_107>"}]),
     efficient_eos=True,
 )
 
 
-register_template(
+_register_template(
     name="belle",
     format_user=StringFormatter(slots=["Human: {{content}}\n\nBelle: "]),
     format_system=StringFormatter(slots=[{"bos_token"}, "{{content}}"]),
@@ -315,13 +340,13 @@ register_template(
 )
 
 
-register_template(
+_register_template(
     name="bluelm",
     format_user=StringFormatter(slots=[{"token": "[|Human|]:"}, "{{content}}", {"token": "[|AI|]:"}]),
 )
 
 
-register_template(
+_register_template(
     name="chatglm2",
     format_user=StringFormatter(slots=["[Round {{idx}}]\n\n问：{{content}}\n\n答："]),
     format_system=StringFormatter(slots=[{"token": "[gMASK]"}, {"token": "sop"}, "{{content}}"]),
@@ -331,8 +356,23 @@ register_template(
 )
 
 
-register_template(
+_register_template(
     name="chatglm3",
+    format_user=StringFormatter(slots=[{"token": "<|user|>"}, "\n", "{{content}}", {"token": "<|assistant|>"}]),
+    format_assistant=StringFormatter(slots=["\n", "{{content}}"]),
+    format_system=StringFormatter(slots=[{"token": "[gMASK]"}, {"token": "sop"}]),
+    format_function=FunctionFormatter(slots=["{{name}}\n{{arguments}}"]),
+    format_observation=StringFormatter(
+        slots=[{"token": "<|observation|>"}, "\n", "{{content}}", {"token": "<|assistant|>"}]
+    ),
+    stop_words=["<|user|>", "<|observation|>"],
+    efficient_eos=True,
+    force_system=True,
+)
+
+
+_register_template(
+    name="chatglm3_system",
     format_user=StringFormatter(slots=[{"token": "<|user|>"}, "\n", "{{content}}", {"token": "<|assistant|>"}]),
     format_assistant=StringFormatter(slots=["\n", "{{content}}"]),
     format_system=StringFormatter(
@@ -351,14 +391,35 @@ register_template(
 )
 
 
-register_template(
+_register_template(
+    name="chatml",
+    format_user=StringFormatter(slots=["<|im_start|>user\n{{content}}<|im_end|>\n<|im_start|>assistant\n"]),
+    format_system=StringFormatter(slots=["<|im_start|>system\n{{content}}<|im_end|>\n"]),
+    format_separator=EmptyFormatter(slots=["\n"]),
+    stop_words=["<|im_end|>", "<|im_start|>"],
+    replace_eos=True,
+)
+
+
+_register_template(
+    name="chatml_de",
+    format_user=StringFormatter(slots=["<|im_start|>user\n{{content}}<|im_end|>\n<|im_start|>assistant\n"]),
+    format_system=StringFormatter(slots=["<|im_start|>system\n{{content}}<|im_end|>\n"]),
+    format_separator=EmptyFormatter(slots=["\n"]),
+    default_system="Du bist ein freundlicher und hilfsbereiter KI-Assistent.",
+    stop_words=["<|im_end|>", "<|im_start|>"],
+    replace_eos=True,
+)
+
+
+_register_template(
     name="codegeex2",
     format_system=StringFormatter(slots=[{"token": "[gMASK]"}, {"token": "sop"}, "{{content}}"]),
     force_system=True,
 )
 
 
-register_template(
+_register_template(
     name="cpm",
     format_user=StringFormatter(slots=["<用户>{{content}}<AI>"]),
     format_system=StringFormatter(slots=[{"bos_token"}, "{{content}}"]),
@@ -366,7 +427,7 @@ register_template(
 )
 
 
-register_template(
+_register_template(
     name="deepseek",
     format_user=StringFormatter(slots=["User: {{content}}\n\nAssistant:"]),
     format_system=StringFormatter(slots=[{"bos_token"}, "{{content}}"]),
@@ -374,9 +435,10 @@ register_template(
 )
 
 
-register_template(
+_register_template(
     name="deepseekcoder",
-    format_user=StringFormatter(slots=["### Instruction:\n{{content}}\n### Response:\n"]),
+    format_user=StringFormatter(slots=["### Instruction:\n{{content}}\n### Response:"]),
+    format_assistant=StringFormatter(slots=["\n", "{{content}}"]),
     format_separator=EmptyFormatter(slots=["\n", {"token": "<|EOT|>"}, "\n"]),
     default_system=(
         "You are an AI programming assistant, utilizing the Deepseek Coder model, "
@@ -389,14 +451,15 @@ register_template(
 )
 
 
-register_template(
+_register_template(
     name="default",
     format_user=StringFormatter(slots=["Human: {{content}}\nAssistant: "]),
+    format_system=StringFormatter(slots=["{{content}}\n"]),
     format_separator=EmptyFormatter(slots=["\n"]),
 )
 
 
-register_template(
+_register_template(
     name="falcon",
     format_user=StringFormatter(slots=["User: {{content}}\nFalcon:"]),
     format_separator=EmptyFormatter(slots=["\n"]),
@@ -404,7 +467,17 @@ register_template(
 )
 
 
-register_template(
+_register_template(
+    name="gemma",
+    format_user=StringFormatter(slots=["<start_of_turn>user\n{{content}}<end_of_turn>\n<start_of_turn>model\n"]),
+    format_system=StringFormatter(slots=[{"bos_token"}, "{{content}}"]),
+    format_separator=EmptyFormatter(slots=["<end_of_turn>\n"]),
+    efficient_eos=True,
+    force_system=True,
+)
+
+
+_register_template(
     name="intern",
     format_user=StringFormatter(slots=["<|User|>:{{content}}", {"token": "<eoh>"}, "\n<|Bot|>:"]),
     format_separator=EmptyFormatter(slots=[{"token": "<eoa>"}, "\n"]),
@@ -413,7 +486,7 @@ register_template(
 )
 
 
-register_template(
+_register_template(
     name="intern2",
     format_user=StringFormatter(slots=["<|im_start|>user\n{{content}}<|im_end|>\n<|im_start|>assistant\n"]),
     format_system=StringFormatter(slots=[{"bos_token"}, "<|im_start|>system\n{{content}}<|im_end|>\n"]),
@@ -430,7 +503,7 @@ register_template(
 )
 
 
-register_template(
+_register_template(
     name="llama2",
     format_user=StringFormatter(slots=[{"bos_token"}, "[INST] {{content}} [/INST]"]),
     format_system=StringFormatter(slots=["<<SYS>>\n{{content}}\n<</SYS>>\n\n"]),
@@ -447,7 +520,7 @@ register_template(
 )
 
 
-register_template(
+_register_template(
     name="llama2_zh",
     format_user=StringFormatter(slots=[{"bos_token"}, "[INST] {{content}} [/INST]"]),
     format_system=StringFormatter(slots=["<<SYS>>\n{{content}}\n<</SYS>>\n\n"]),
@@ -455,7 +528,7 @@ register_template(
 )
 
 
-register_template(
+_register_template(
     name="mistral",
     format_user=StringFormatter(slots=["[INST] {{content}} [/INST]"]),
     format_system=StringFormatter(slots=[{"bos_token"}, "{{content}}"]),
@@ -463,16 +536,16 @@ register_template(
 )
 
 
-register_template(
+_register_template(
     name="openchat",
     format_user=StringFormatter(slots=["GPT4 Correct User: {{content}}", {"eos_token"}, "GPT4 Correct Assistant:"]),
-    format_assistant=StringFormatter(slots=["{{content}}"]),
+    format_assistant=StringFormatter(slots=["{{content}}", {"eos_token"}]),
     format_system=StringFormatter(slots=[{"bos_token"}, "{{content}}"]),
     force_system=True,
 )
 
 
-register_template(
+_register_template(
     name="orion",
     format_user=StringFormatter(slots=["Human: {{content}}\n\nAssistant: ", {"eos_token"}]),
     format_system=StringFormatter(slots=[{"bos_token"}, "{{content}}"]),
@@ -480,7 +553,7 @@ register_template(
 )
 
 
-register_template(
+_register_template(
     name="qwen",
     format_user=StringFormatter(slots=["<|im_start|>user\n{{content}}<|im_end|>\n<|im_start|>assistant\n"]),
     format_system=StringFormatter(slots=["<|im_start|>system\n{{content}}<|im_end|>\n"]),
@@ -491,7 +564,7 @@ register_template(
 )
 
 
-register_template(
+_register_template(
     name="solar",
     format_user=StringFormatter(slots=["### User:\n{{content}}\n\n### Assistant:\n"]),
     format_system=StringFormatter(slots=["### System:\n{{content}}\n\n"]),
@@ -499,7 +572,7 @@ register_template(
 )
 
 
-register_template(
+_register_template(
     name="starchat",
     format_user=StringFormatter(
         slots=[{"token": "<|user|>"}, "\n{{content}}", {"token": "<|end|>"}, "\n", {"token": "<|assistant|>"}]
@@ -512,10 +585,12 @@ register_template(
 )
 
 
-register_template(name="vanilla")
+_register_template(
+    name="vanilla",
+)
 
 
-register_template(
+_register_template(
     name="vicuna",
     format_user=StringFormatter(slots=["USER: {{content}} ASSISTANT:"]),
     default_system=(
@@ -525,7 +600,7 @@ register_template(
 )
 
 
-register_template(
+_register_template(
     name="xuanyuan",
     format_user=StringFormatter(slots=["Human: {{content}} Assistant:"]),
     default_system=(
@@ -536,10 +611,13 @@ register_template(
 )
 
 
-register_template(name="xverse", format_user=StringFormatter(slots=["Human: {{content}}\n\nAssistant: "]))
+_register_template(
+    name="xverse",
+    format_user=StringFormatter(slots=["Human: {{content}}\n\nAssistant: "]),
+)
 
 
-register_template(
+_register_template(
     name="yayi",
     format_user=StringFormatter(slots=[{"token": "<|Human|>"}, ":\n{{content}}\n\n", {"token": "<|YaYi|>"}, ":"]),
     format_system=StringFormatter(slots=[{"token": "<|System|>"}, ":\n{{content}}\n\n"]),
@@ -559,7 +637,7 @@ register_template(
 )
 
 
-register_template(
+_register_template(
     name="yi",
     format_user=StringFormatter(slots=["<|im_start|>user\n{{content}}<|im_end|>\n<|im_start|>assistant\n"]),
     format_separator=EmptyFormatter(slots=["\n"]),
@@ -568,7 +646,7 @@ register_template(
 )
 
 
-register_template(
+_register_template(
     name="yuan",
     format_user=StringFormatter(slots=["{{content}}", {"token": "<sep>"}]),
     format_separator=EmptyFormatter(slots=["\n"]),
@@ -577,7 +655,7 @@ register_template(
 )
 
 
-register_template(
+_register_template(
     name="zephyr",
     format_user=StringFormatter(slots=["<|user|>\n{{content}}", {"eos_token"}, "<|assistant|>"]),
     format_system=StringFormatter(slots=["<|system|>\n{{content}}", {"eos_token"}]),
@@ -585,7 +663,7 @@ register_template(
 )
 
 
-register_template(
+_register_template(
     name="ziya",
     format_user=StringFormatter(slots=[{"token": "<human>"}, ":{{content}}\n", {"token": "<bot>"}, ":"]),
     format_separator=EmptyFormatter(slots=["\n"]),
