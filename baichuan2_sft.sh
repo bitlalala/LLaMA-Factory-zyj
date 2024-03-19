@@ -1,11 +1,11 @@
-deepspeed --include localhost:5,6 \
+deepspeed --include localhost:0,2 \
     --master_port=9907 src/train_bash.py \
     --deepspeed ds_config.json \
     --stage sft \
     --model_name_or_path /mnt/nas_data/zyj_workspace/zyj_data/Baichuan2-13B-Chat \
-    --output_dir /mnt/nas_data/zyj_workspace/zyj_data/sft_output/bachuan2-13B-sft-etc-v5-50e-bs16-codev0.5.0\
+    --output_dir /mnt/nas_data/zyj_workspace/zyj_data/sft_output/bachuan2-13B-sft-etc-v5-745-50e-bs16-codev0.5.0\
     --do_train \
-    --dataset  etc-v5-700-total-output\
+    --dataset  etc-v5-745-total-output\
     --split train \
     --val_size 0.1 \
     --template baichuan2 \

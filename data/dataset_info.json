@@ -1,6 +1,6 @@
 {
-  "etc-v5-700-total-output":{
-    "file_name": "/mnt/nas_data/zyj_workspace/zyj_data/数字人/processd_data/v5-20240131/标注数据-加车牌号与颜色-train700.json"
+  "etc-v5-745-total-output":{
+    "file_name": "/mnt/nas_data/zyj_workspace/zyj_data/数字人/processd_data/v5-20240222/标注数据-20240222-745train.json"
   },
   "alpaca_en": {
     "file_name": "alpaca_data_en_52k.json",
