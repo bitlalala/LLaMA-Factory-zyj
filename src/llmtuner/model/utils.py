@@ -1,13 +1,14 @@
-import inspect
+from enum import Enum, unique
 from typing import TYPE_CHECKING, Dict, List
 
 import torch
 from transformers import PreTrainedModel
+from transformers.integrations import is_deepspeed_zero3_enabled
 from transformers.utils import cached_file
+from transformers.utils.versions import require_version
 
 from ..extras.constants import V_HEAD_SAFE_WEIGHTS_NAME, V_HEAD_WEIGHTS_NAME
 from ..extras.logging import get_logger
-from ..extras.misc import get_current_device
 
 
 if TYPE_CHECKING:
@@ -19,44 +20,38 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-def dispatch_model(model: "PreTrainedModel") -> "PreTrainedModel":
+@unique
+class QuantizationMethod(str, Enum):
     r"""
-    Dispatches a pre-trained model to GPUs with balanced memory when the GPU is available.
-    Borrowed from: https://github.com/huggingface/transformers/blob/v4.36.2/src/transformers/modeling_utils.py#L3570
+    Borrowed from `transformers.utils.quantization_config.QuantizationMethod`.
     """
-    if getattr(model, "quantization_method", None):  # already set on current device
-        return model
 
-    if (
-        torch.cuda.device_count() > 1
-        and isinstance(model, PreTrainedModel)
-        and model._no_split_modules is not None
-        and model.config.model_type != "chatglm"
-    ):
-        from accelerate import dispatch_model
-        from accelerate.utils import get_balanced_memory, infer_auto_device_map
+    BITS_AND_BYTES = "bitsandbytes"
+    GPTQ = "gptq"
+    AWQ = "awq"
+    AQLM = "aqlm"
+    QUANTO = "quanto"
 
-        kwargs = {"dtype": model.dtype, "no_split_module_classes": model._get_no_split_modules("auto")}
-        max_memory = get_balanced_memory(model, **kwargs)
-        # Make sure tied weights are tied before creating the device map.
-        model.tie_weights()
-        device_map = infer_auto_device_map(model, max_memory=max_memory, **kwargs)
-        device_map_kwargs = {"device_map": device_map, "offload_dir": "offload"}
-        if "skip_keys" in inspect.signature(dispatch_model).parameters:
-            device_map_kwargs["skip_keys"] = model._skip_keys_device_placement
-        return dispatch_model(model, **device_map_kwargs)
-    else:
-        return model.to(device=get_current_device())
+
+def add_z3_leaf_module(model: "PreTrainedModel", module: "torch.nn.Module") -> None:
+    r"""
+    Sets module as a leaf module to skip partitioning in deepspeed zero3.
+    """
+    if is_deepspeed_zero3_enabled():
+        require_version("deepspeed>=0.13.0", "To fix: pip install deepspeed>=0.13.0")
+        from deepspeed.utils import set_z3_leaf_modules  # type: ignore
+
+        set_z3_leaf_modules(model, [module])
 
 
 def find_all_linear_modules(model: "PreTrainedModel") -> List[str]:
     r"""
-    Finds all available modules to apply lora.
+    Finds all available modules to apply lora or galore.
     """
     quantization_method = getattr(model, "quantization_method", None)
     if quantization_method is None:
         linear_cls = torch.nn.Linear
-    elif quantization_method == "bitsandbytes":
+    elif quantization_method == QuantizationMethod.BITS_AND_BYTES:
         import bitsandbytes as bnb
 
         linear_cls = bnb.nn.Linear4bit if getattr(model, "is_loaded_in_4bit", False) else bnb.nn.Linear8bitLt
@@ -66,6 +61,8 @@ def find_all_linear_modules(model: "PreTrainedModel") -> List[str]:
     output_layer_names = ["lm_head"]
     if model.config.model_type == "chatglm":
         output_layer_names.append("output_layer")
+    elif model.config.model_type == "internlm2":
+        output_layer_names.append("output")
 
     module_names = set()
     for name, module in model.named_modules():
