@@ -1,4 +1,13 @@
 {
+  "agent_instruct_local": {
+    "file_name": "/mnt/nas_data/zyj_workspace/zyj_code/LLaMA-Efficient-Tuning/data/glaive_toolcall_10k.json",
+    "formatting": "sharegpt",
+    "columns": {
+      "messages": "conversations",
+      "role": "from",
+      "content": "value"
+    }
+  },
   "etc-v5-745-total-output":{
     "file_name": "/mnt/nas_data/zyj_workspace/zyj_data/数字人/processd_data/v5-20240222/标注数据-20240222-745train.json"
   },
